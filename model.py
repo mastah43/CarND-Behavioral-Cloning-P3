@@ -72,9 +72,10 @@ def create_model_nvidia():
     # TODO use YUV planes of image
 
     model = Sequential()
-    model.add(Flatten(input_shape=(160, 320, 3)))
     # TODO normalization layer
-    model.add(Convolution2D(24, 31, 98))
+    # TODO add dropout
+    # TODO add L2 regularization
+    model.add(Convolution2D(24, 31, 98, input_shape=(160, 320, 3)))
     model.add(Activation('relu'))
     model.add(Convolution2D(36, 14, 47))
     model.add(Activation('relu'))
@@ -94,6 +95,7 @@ def create_model_nvidia():
     model.add(Dense(10))
     model.add(Activation('relu'))
     model.add(Dense(1, name='angle'))
+    # TODO model.add(Dropout(0.2))
 
     model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
 
@@ -102,10 +104,9 @@ def create_model_nvidia():
 
 def load_dataset(drivelog_csv_path):
     def load_img(path):
-        path = './IMG/' + path.split('\\')[-1]
+        path = drivelog_csv_path[0:drivelog_csv_path.rfind('/')] + '/IMG/' + path.split('/')[-1]
         img = image.load_img(path)
         img = image.img_to_array(img)
-        # TODO img = np.expand_dims(img, axis=0)
         return img
 
     logger.info("loading drive log %s", drivelog_csv_path)
@@ -115,7 +116,7 @@ def load_dataset(drivelog_csv_path):
     logger.info("drive log size: %d", drive_log.size)
 
     dataset = DataSet()
-    len_dataset = 100 # TODO drive_log.size
+    len_dataset = drive_log.size
     angles = []
     images = []
 
@@ -147,7 +148,7 @@ def train_model(model, dataset):
 
     # TODO create bottleneck features to speed up training (so inference of transfer learning model is not needed during training)
 
-    model.fit(dataset.images, dataset.angles, epochs=10, batch_size=128, validation_split=0.2, shuffle=True)
+    model.fit(dataset.images, dataset.angles, epochs=7, batch_size=128, validation_split=0.2, shuffle=True)
     # TODO validate model after each epoch and print out results
     pass
 
@@ -162,8 +163,8 @@ if __name__ == '__main__':
 
     # TODO record new training data using mouse input for fine grained drive angles
 
-    steering_model = create_model_trivial()
-    driving_dataset = load_dataset('driving_log.csv')
+    driving_dataset = load_dataset('/home/marc/udacity/drivelog1/driving_log.csv')
     augment_dataset(driving_dataset)
+    steering_model = create_model_nvidia()
     train_model(steering_model, driving_dataset)
     save_model(steering_model, 'model-1.h5')
