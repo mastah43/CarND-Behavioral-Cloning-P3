@@ -1,0 +1,9 @@
+pandas
+numpy
+keras
+tqdm
+Pillow
+h5py
+python-socketio
+eventlet
+flask
