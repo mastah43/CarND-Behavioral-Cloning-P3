@@ -75,6 +75,8 @@ def create_model_nvidia():
     # TODO normalization layer
     # TODO add dropout
     # TODO add L2 regularization
+    #model.add(Flatten(input_shape=(160, 320, 3)))
+
     model.add(Convolution2D(24, 31, 98, input_shape=(160, 320, 3)))
     model.add(Activation('relu'))
     model.add(Convolution2D(36, 14, 47))
@@ -148,7 +150,8 @@ def train_model(model, dataset):
 
     # TODO create bottleneck features to speed up training (so inference of transfer learning model is not needed during training)
 
-    model.fit(dataset.images, dataset.angles, epochs=7, batch_size=128, validation_split=0.2, shuffle=True)
+    # TODO could use model.fit_generator to load and augment images while training on gpu
+    model.fit(dataset.images, dataset.angles, epochs=1, validation_split=0.2, shuffle=True)
     # TODO validate model after each epoch and print out results
     pass
 
@@ -163,7 +166,7 @@ if __name__ == '__main__':
 
     # TODO record new training data using mouse input for fine grained drive angles
 
-    driving_dataset = load_dataset('/home/marc/udacity/drivelog1/driving_log.csv')
+    driving_dataset = load_dataset('../drivelog1/driving_log.csv')
     augment_dataset(driving_dataset)
     steering_model = create_model_nvidia()
     train_model(steering_model, driving_dataset)

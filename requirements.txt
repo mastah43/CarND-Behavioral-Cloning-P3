@@ -7,3 +7,4 @@ h5py
 python-socketio
 eventlet
 flask
+tensorflow
