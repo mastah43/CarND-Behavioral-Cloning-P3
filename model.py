@@ -1,6 +1,6 @@
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Input, Flatten
-from keras.layers.convolutional import Convolution2D
+from keras.layers import Dense, Activation, Flatten, Lambda, Dropout
+from keras.layers.convolutional import Conv2D
 from keras.preprocessing import image
 import pandas as pd
 import numpy as np
@@ -76,28 +76,45 @@ def create_model_nvidia():
     # TODO add dropout
     # TODO add L2 regularization
     #model.add(Flatten(input_shape=(160, 320, 3)))
+    model.add(Lambda(lambda x : x / 255.0 - 0.5, input_shape=(160, 320, 3)))
 
-    model.add(Convolution2D(24, 31, 98, input_shape=(160, 320, 3)))
+    model.add(Conv2D(24, (31, 98)))
     model.add(Activation('relu'))
-    model.add(Convolution2D(36, 14, 47))
+    model.add(Dropout(0.5))
+
+    model.add(Conv2D(36, (14, 47)))
     model.add(Activation('relu'))
-    model.add(Convolution2D(48, 5, 22))
+    model.add(Dropout(0.5))
+
+    model.add(Conv2D(48, (5, 22)))
     model.add(Activation('relu'))
-    model.add(Convolution2D(64, 3, 20))
+    model.add(Dropout(0.5))
+
+    model.add(Conv2D(64, (3, 20)))
     model.add(Activation('relu'))
-    model.add(Convolution2D(64, 1, 18))
+    model.add(Dropout(0.5))
+
+    model.add(Conv2D(64, (1, 18)))
     model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+
     model.add(Flatten())
     model.add(Dense(1164))
     model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+
     model.add(Dense(100))
     model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+
     model.add(Dense(50))
     model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+
     model.add(Dense(10))
     model.add(Activation('relu'))
     model.add(Dense(1, name='angle'))
-    # TODO model.add(Dropout(0.2))
+    model.add(Dropout(0.5))
 
     model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
 
@@ -113,12 +130,13 @@ def load_dataset(drivelog_csv_path):
 
     logger.info("loading drive log %s", drivelog_csv_path)
     drive_log = pd.read_csv(drivelog_csv_path,
-        names=['img_path_center', 'img_path_left', 'img_path_right', 'angle', 'throttle', 'break', 'speed'],
-        dtype={'angle':np.float32})
+                            names=['img_path_center', 'img_path_left', 'img_path_right',
+                                   'angle', 'throttle', 'break', 'speed'],
+                            dtype={'angle':np.float32})
     logger.info("drive log size: %d", drive_log.size)
 
     dataset = DataSet()
-    len_dataset = drive_log.size
+    len_dataset = 100 # TODO drive_log.size
     angles = []
     images = []
 
@@ -128,7 +146,11 @@ def load_dataset(drivelog_csv_path):
         angle = drive_log_row['angle']
         angle_diff_correct = (math.pi/180) * 10
         angles.append(angle)
-        images.append(load_img(drive_log_row['img_path_center']))
+        img = load_img(drive_log_row['img_path_center'])
+        images.append(img)
+
+        angles.append(angle*-1.0)
+        images.append(np.fliplr(img))
 
         #dataset.angles.append(load_img(drive_log_row['img_path_left']))
         #dataset.images.append(angle - angle_diff_correct)
