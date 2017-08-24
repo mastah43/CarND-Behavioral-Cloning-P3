@@ -69,52 +69,37 @@ def create_model_nvidia():
     :return:
     '''
 
-    # TODO use YUV planes of image
+    # TODO use YUV planes of image?
 
     model = Sequential()
-    # TODO normalization layer
-    # TODO add dropout
-    # TODO add L2 regularization
-    #model.add(Flatten(input_shape=(160, 320, 3)))
     model.add(Lambda(lambda x : x / 255.0 - 0.5, input_shape=(160, 320, 3)))
 
-    model.add(Conv2D(24, (31, 98)))
-    model.add(Activation('relu'))
+    model.add(Conv2D(24, 5, 5, subsample=(2, 2), name='conv_1', activation='elu'))
+    model.add(Conv2D(36, 5, 5, subsample=(2, 2), name='conv_2', activation='elu'))
+    model.add(Conv2D(48, 5, 5, subsample=(2, 2), name='conv_3', activation='elu'))
     model.add(Dropout(0.5))
 
-    model.add(Conv2D(36, (14, 47)))
-    model.add(Activation('relu'))
+    model.add(Conv2D(64, 3, 3, subsample=(1, 1), name='conv_4', activation='elu'))
+    model.add(Conv2D(64, 3, 3, subsample=(1, 1), name='conv_5', activation='elu'))
     model.add(Dropout(0.5))
-
-    model.add(Conv2D(48, (5, 22)))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.5))
-
-    model.add(Conv2D(64, (3, 20)))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.5))
-
-    model.add(Conv2D(64, (1, 18)))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.5))
-
+    
     model.add(Flatten())
     model.add(Dense(1164))
-    model.add(Activation('relu'))
+    model.add(Activation('elu'))
     model.add(Dropout(0.5))
 
     model.add(Dense(100))
-    model.add(Activation('relu'))
+    model.add(Activation('elu'))
     model.add(Dropout(0.5))
 
     model.add(Dense(50))
-    model.add(Activation('relu'))
+    model.add(Activation('elu'))
     model.add(Dropout(0.5))
 
     model.add(Dense(10))
-    model.add(Activation('relu'))
+    model.add(Activation('elu'))
+
     model.add(Dense(1, name='angle'))
-    model.add(Dropout(0.5))
 
     model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
 
@@ -128,12 +113,12 @@ def load_dataset(drivelog_csv_path):
         img = image.img_to_array(img)
         return img
 
-    logger.info("loading drive log %s", drivelog_csv_path)
+    logger.info('loading drive log %s', drivelog_csv_path)
     drive_log = pd.read_csv(drivelog_csv_path,
                             names=['img_path_center', 'img_path_left', 'img_path_right',
                                    'angle', 'throttle', 'break', 'speed'],
                             dtype={'angle':np.float32})
-    logger.info("drive log size: %d", drive_log.size)
+    logger.info('drive log size: %d', drive_log.size)
 
     dataset = DataSet()
     len_dataset = 100 # TODO drive_log.size
@@ -141,7 +126,7 @@ def load_dataset(drivelog_csv_path):
     images = []
 
     # TODO use np memory map to deal with too low main mem?, see https://www.kaggle.com/c/state-farm-distracted-driver-detection/discussion/20664
-    for index, drive_log_row in tqdm(drive_log[0:len_dataset].iterrows(), "loading and normalizing training images"):
+    for index, drive_log_row in tqdm(drive_log[0:len_dataset].iterrows(), 'loading and normalizing training images'):
         # TODO angle = float(drive_log_row['angle'])
         angle = drive_log_row['angle']
         angle_diff_correct = (math.pi/180) * 10
@@ -173,14 +158,14 @@ def train_model(model, dataset):
     # TODO create bottleneck features to speed up training (so inference of transfer learning model is not needed during training)
 
     # TODO could use model.fit_generator to load and augment images while training on gpu
-    model.fit(dataset.images, dataset.angles, epochs=1, validation_split=0.2, shuffle=True)
+    model.fit(dataset.images, dataset.angles, epochs=7, validation_split=0.2, shuffle=True)
     # TODO validate model after each epoch and print out results
     pass
 
 
 def save_model(model, filename):
     model.save(filename)
-    logger.info("saved model to %s", filename)
+    logger.info('saved model to %s', filename)
 
 
 img = None
