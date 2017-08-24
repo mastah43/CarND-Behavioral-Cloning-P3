@@ -121,7 +121,7 @@ def load_dataset(drivelog_csv_path):
     logger.info('drive log size: %d', drive_log.size)
 
     dataset = DataSet()
-    len_dataset = 100 # TODO drive_log.size
+    len_dataset = drive_log.size
     angles = []
     images = []
 
