@@ -77,31 +77,28 @@ def create_model_nvidia():
     model.add(Conv2D(24, 5, 5, subsample=(2, 2), name='conv_1', activation='elu'))
     model.add(Conv2D(36, 5, 5, subsample=(2, 2), name='conv_2', activation='elu'))
     model.add(Conv2D(48, 5, 5, subsample=(2, 2), name='conv_3', activation='elu'))
-    model.add(Dropout(0.5))
-
     model.add(Conv2D(64, 3, 3, subsample=(1, 1), name='conv_4', activation='elu'))
     model.add(Conv2D(64, 3, 3, subsample=(1, 1), name='conv_5', activation='elu'))
-    model.add(Dropout(0.5))
-    
+
     model.add(Flatten())
     model.add(Dense(1164))
-    model.add(Activation('linear'))
+    model.add(Activation('elu'))
     model.add(Dropout(0.5))
 
     model.add(Dense(100))
-    model.add(Activation('linear'))
+    model.add(Activation('elu'))
     model.add(Dropout(0.5))
 
     model.add(Dense(50))
-    model.add(Activation('linear'))
+    model.add(Activation('elu'))
     model.add(Dropout(0.5))
 
     model.add(Dense(10))
-    model.add(Activation('linear'))
+    model.add(Activation('elu'))
 
     model.add(Dense(1, name='angle'))
 
-    model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='mse', optimizer='adam', metrics=['mse'])
 
     return model
 
@@ -133,12 +130,12 @@ def load_dataset(drivelog_csv_path):
         angles.append(angle)
         img = load_img(drive_log_row['img_path_center'])
         images.append(img)
-
         angles.append(angle*-1.0)
         images.append(np.fliplr(img))
 
         #dataset.angles.append(load_img(drive_log_row['img_path_left']))
         #dataset.images.append(angle - angle_diff_correct)
+
         #dataset.angles.append(load_img(drive_log_row['img_path_right']))
         #dataset.images.append(angle + angle_diff_correct)
 
