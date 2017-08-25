@@ -1,5 +1,5 @@
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Flatten, Lambda, Dropout
+from keras.layers import Dense, Activation, Flatten, Lambda, Dropout, Cropping2D
 from keras.layers.convolutional import Conv2D
 from keras.preprocessing import image
 import pandas as pd
@@ -72,7 +72,8 @@ def create_model_nvidia():
     # TODO use YUV planes of image?
 
     model = Sequential()
-    model.add(Lambda(lambda x : x / 255.0 - 0.5, input_shape=(160, 320, 3)))
+    model.add(Cropping2D(cropping=((50, 20), (0, 0)), input_shape=(3, 160, 320)))
+    model.add(Lambda(lambda x : x / 255.0 - 0.5))
 
     model.add(Conv2D(24, 5, 5, subsample=(2, 2), name='conv_1', activation='elu'))
     model.add(Conv2D(36, 5, 5, subsample=(2, 2), name='conv_2', activation='elu'))
@@ -123,21 +124,30 @@ def load_dataset(drivelog_csv_path):
     images = []
 
     # TODO use np memory map to deal with too low main mem?, see https://www.kaggle.com/c/state-farm-distracted-driver-detection/discussion/20664
+    angle_correction = 3
     for index, drive_log_row in tqdm(drive_log[0:len_dataset].iterrows(), 'loading and normalizing training images'):
         # TODO angle = float(drive_log_row['angle'])
         angle = drive_log_row['angle']
-        angle_diff_correct = (math.pi/180) * 10
         angles.append(angle)
         img = load_img(drive_log_row['img_path_center'])
         images.append(img)
         angles.append(angle*-1.0)
         images.append(np.fliplr(img))
 
-        #dataset.angles.append(load_img(drive_log_row['img_path_left']))
-        #dataset.images.append(angle - angle_diff_correct)
+        img_left = load_img(drive_log_row['img_path_left'])
+        angle_left = angle - angle_correction
+        dataset.angles.append(angle_left)
+        dataset.images.append(img_left)
+        dataset.angles.append(angle_left*-1.0)
+        dataset.images.append(np.fliplr(img_left))
 
-        #dataset.angles.append(load_img(drive_log_row['img_path_right']))
-        #dataset.images.append(angle + angle_diff_correct)
+        img_right = load_img(drive_log_row['img_path_right'])
+        angle_right = angle - angle_correction
+        dataset.angles.append(angle_right)
+        dataset.images.append(img_right)
+        dataset.angles.append(angle_right * -1.0)
+        dataset.images.append(np.fliplr(img_right))
+
 
     dataset.angles = np.array(angles)
     dataset.images = np.array(images)
@@ -174,4 +184,4 @@ if __name__ == '__main__':
     augment_dataset(driving_dataset)
     steering_model = create_model_nvidia()
     train_model(steering_model, driving_dataset)
-    save_model(steering_model, 'model-1.h5')
+    save_model(steering_model, 'model-2.h5')
