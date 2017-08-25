@@ -124,7 +124,7 @@ def load_dataset(drivelog_csv_path):
     images = []
 
     # TODO use np memory map to deal with too low main mem?, see https://www.kaggle.com/c/state-farm-distracted-driver-detection/discussion/20664
-    angle_correction = 3
+    angle_correction = 2
     for index, drive_log_row in tqdm(drive_log[0:len_dataset].iterrows(), 'loading and normalizing training images'):
         # TODO angle = float(drive_log_row['angle'])
         angle = drive_log_row['angle']
@@ -135,7 +135,7 @@ def load_dataset(drivelog_csv_path):
         images.append(np.fliplr(img))
 
         img_left = load_img(drive_log_row['img_path_left'])
-        angle_left = angle - angle_correction
+        angle_left = angle + angle_correction
         dataset.angles.append(angle_left)
         dataset.images.append(img_left)
         dataset.angles.append(angle_left*-1.0)
