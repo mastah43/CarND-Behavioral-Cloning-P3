@@ -2,14 +2,16 @@ from keras.models import Sequential
 from keras.layers import Dense, Activation, Flatten, Lambda, Dropout, Cropping2D
 from keras.layers.convolutional import Conv2D
 from keras.preprocessing import image as keras_image
-from keras.callbacks import CSVLogger
+from keras.callbacks import CSVLogger, ModelCheckpoint
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
 #import matplotlib.pyplot as plt #TODO
 import pandas as pd
 import numpy as np
 import logging
 import datetime
-import math
-from tqdm import tqdm
+import argparse
+import os
 
 timestamp_start = datetime.datetime.now().strftime("%Y%m%d-%H%M")
 
@@ -23,12 +25,6 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 
-class DataSet( object ):
-    def __init__( self ):
-        self.angles = []
-        self.images = []
-
-
 def create_model_nvidia():
     '''
     Creates a model based on the paper https://devblogs.nvidia.com/parallelforall/deep-learning-self-driving-cars/
@@ -38,7 +34,7 @@ def create_model_nvidia():
 
     model = Sequential()
     model.add(Cropping2D(cropping=((50, 20), (0, 0)), input_shape=(160, 320, 3)))
-    # TODO resize image to 45, 160, 3
+    # TODO resize image to 45, 160, 3 ?
     model.add(Lambda(lambda x: x / 255.0 - 0.5))
 
     model.add(Conv2D(24, 5, strides=2, name='conv_1', activation='elu'))
@@ -66,55 +62,83 @@ def create_model_nvidia():
     return model
 
 
-def load_dataset(dataset, drivelog_csv_path, header=None):
-    def load_img(path):
-        path = drivelog_csv_path[0:drivelog_csv_path.rfind('/')] + '/IMG/' + path.split('/')[-1]
-        img = keras_image.load_img(path)
-        img = keras_image.img_to_array(img)
-        return img
+def load_drive_log(csv_path, header=None):
+    logger.info('loading drive log %s', csv_path)
+    df = pd.read_csv(csv_path,
+                     header=header,
+                     names=['img_path_center', 'img_path_left', 'img_path_right',
+                            'angle', 'throttle', 'break', 'speed'],
+                     dtype={'angle':np.float32})
 
-    logger.info('loading drive log %s', drivelog_csv_path)
-    drive_log = pd.read_csv(drivelog_csv_path,
-                            header=header,
-                            names=['img_path_center', 'img_path_left', 'img_path_right',
-                                   'angle', 'throttle', 'break', 'speed'],
-                            dtype={'angle':np.float32})
-    logger.info('drive log size: %d', drive_log.size)
+    def map_img_path(path):
+        return os.path.join(os.path.dirname(os.path.realpath(csv_path)), 'IMG', path.split('/')[-1])
 
-    len_dataset = drive_log.size
+    for index,row in df.iterrows():
+        # TODO improve efficiency
+        df.set_value(index, 'img_path_center', map_img_path(row['img_path_center']))
+        df.set_value(index, 'img_path_left', map_img_path(row['img_path_left']))
+        df.set_value(index, 'img_path_right', map_img_path(row['img_path_right']))
 
-    # TODO use np memory map to deal with too low main mem?, see https://www.kaggle.com/c/state-farm-distracted-driver-detection/discussion/20664
-    # correction angle for left and right camera image interpretes to 3°
-    angle_correction = 0.12
-
-    for index, drive_log_row in tqdm(drive_log[0:len_dataset].iterrows(), 'loading and augmenting training images'):
-
-        def add_entry(angle, img):
-            dataset.angles.append(angle)
-            dataset.images.append(img)
-            dataset.angles.append(angle * -1.0)
-            dataset.images.append(np.fliplr(img))
-
-        angle = drive_log_row['angle']
-        # angle is in range -1 to 1 which interpretes to -25° to +25°
-        add_entry(angle, load_img(drive_log_row['img_path_center']))
-        add_entry(angle + angle_correction, load_img(drive_log_row['img_path_left']))
-        add_entry(angle - angle_correction, load_img(drive_log_row['img_path_right']))
-
-    return dataset
+    logger.info('drive log size: %d', df.size)
+    return df
 
 
-def train_model(model, dataset):
-    angles = np.array(dataset.angles)
-    images = np.array(dataset.images)
+def train_model(model, drive_log):
 
-    # TODO use generator model.fit_generator, see https://keras.io/models/model/
+    def sample_generator(drive_log, batch_size=128):
+        num_samples = len(drive_log)
+        shuffle(drive_log)
+        # correction angle for left and right camera image; interpretes to 3°
+        angle_correction = 0.12
 
+        # TODO create drive_log with augmented entries (using python function for augmentation)
+
+        while 1:
+            for offset in range(0, num_samples, batch_size):
+                batch_samples = drive_log[offset:offset + batch_size]
+                images = []
+                angles = []
+
+                def load_img(path):
+                    img = keras_image.load_img(path)
+                    img = keras_image.img_to_array(img)
+                    return img
+
+                def add_sample_and_augment(angle, img):
+                    angles.append(angle)
+                    images.append(img)
+                    angles.append(angle * -1.0)
+                    images.append(np.fliplr(img))
+
+                for index, drive_log_row in batch_samples.iterrows():
+                    # angle is in range -1 to 1 which interpretes to -25° to +25°
+                    angle_center = drive_log_row['angle']
+                    add_sample_and_augment(angle_center, load_img(drive_log_row['img_path_center']))
+                    angle_left = angle_center + angle_correction
+                    angle_right = angle_center - angle_correction
+                    add_sample_and_augment(angle_left, load_img(drive_log_row['img_path_left']))
+                    add_sample_and_augment(angle_right, load_img(drive_log_row['img_path_right']))
+
+                yield shuffle(np.array(images), np.array(angles))
+
+    train_drive_log, validate_drive_log = train_test_split(drive_log, test_size=0.2)
+    batch_size = 256
+    train_generator = sample_generator(train_drive_log, batch_size)
+    validate_generator = sample_generator(validate_drive_log, batch_size)
+
+    model_checkpoint = ModelCheckpoint(
+        filepath='model-' + timestamp_start + '{epoch:02d}-{val_loss:.2f}.h5',
+        verbose=1,
+        save_best_only=True)
     csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv')
-    train_history = model.fit(images, angles, epochs=7, validation_split=0.2, shuffle=True, callbacks=[csv_logger])
-    # TODO increase epochs
+    model.fit_generator(generator=train_generator,
+                        steps_per_epoch=train_drive_log.size/batch_size,
+                        validation_data=validate_generator,
+                        validation_steps=validate_drive_log.size/batch_size,
+                        nb_epoch=7,
+                        callbacks=[csv_logger, model_checkpoint])
 
-    # TODO
+    # TODO plot history of losses
     #plt.plot(train_history.history['loss'])
     #plt.plot(train_history.history['val_loss'])
     #plt.title('model mean squared error loss')
@@ -132,9 +156,17 @@ def save_model(model, filename):
 
 
 if __name__ == '__main__':
-    dataset = DataSet()
-    driving_dataset = load_dataset(dataset, '../drivelog1/driving_log.csv')
-    driving_dataset = load_dataset(dataset, '../drivelog2/driving_log.csv', header=0)
+    # TODO batchsize arg
+    #parser = argparse.ArgumentParser(description='Process some integers.')
+    #parser.add_argument('--batchsize', dest='accumulate', action='store_const',
+    #                    const=sum, default=max,
+    #                    help='sum the integers (default: find the max)')
+    #args = parser.parse_args()
+
+    drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
+    drive_log2 = load_drive_log('../drivelog2/driving_log.csv', header=0)
+    drive_log_all = pd.concat([drive_log1, drive_log2])
+
     steering_model = create_model_nvidia()
-    train_model(steering_model, driving_dataset)
+    train_model(steering_model, drive_log_all)
     save_model(steering_model, 'model-' + timestamp_start + '.h5')
