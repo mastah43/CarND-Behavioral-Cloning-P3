@@ -36,8 +36,6 @@ def create_model_nvidia():
     :return:
     '''
 
-    # TODO use YUV planes of image?
-
     model = Sequential()
     model.add(Cropping2D(cropping=((50, 20), (0, 0)), input_shape=(160, 320, 3)))
     # TODO resize image to 45, 160, 3
