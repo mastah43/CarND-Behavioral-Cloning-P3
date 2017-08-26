@@ -11,7 +11,7 @@ import datetime
 import math
 from tqdm import tqdm
 
-timestamp_start = datetime.datetime.now().strftime("%Y-%B-%d-%I:%M%p")
+timestamp_start = datetime.datetime.now().strftime("%Y%m%d-%H%M")
 
 # setup logging
 logger = logging.getLogger('model')
@@ -40,7 +40,7 @@ def create_model_nvidia():
 
     model = Sequential()
     model.add(Cropping2D(cropping=((50, 20), (0, 0)), input_shape=(160, 320, 3)))
-    model.add(Lambda(lambda x: keras_image.resize_images(x, 128, 128)))
+    # TODO resize image to 45, 160, 3
     model.add(Lambda(lambda x: x / 255.0 - 0.5))
 
     model.add(Conv2D(24, 5, strides=2, name='conv_1', activation='elu'))
@@ -86,7 +86,9 @@ def load_dataset(dataset, drivelog_csv_path, header=None):
     len_dataset = drive_log.size
 
     # TODO use np memory map to deal with too low main mem?, see https://www.kaggle.com/c/state-farm-distracted-driver-detection/discussion/20664
-    angle_correction = 2
+    # correction angle for left and right camera image interpretes to 3°
+    angle_correction = 0.12
+
     for index, drive_log_row in tqdm(drive_log[0:len_dataset].iterrows(), 'loading and augmenting training images'):
 
         def add_entry(angle, img):
@@ -96,6 +98,7 @@ def load_dataset(dataset, drivelog_csv_path, header=None):
             dataset.images.append(np.fliplr(img))
 
         angle = drive_log_row['angle']
+        # angle is in range -1 to 1 which interpretes to -25° to +25°
         add_entry(angle, load_img(drive_log_row['img_path_center']))
         add_entry(angle + angle_correction, load_img(drive_log_row['img_path_left']))
         add_entry(angle - angle_correction, load_img(drive_log_row['img_path_right']))
@@ -109,8 +112,9 @@ def train_model(model, dataset):
 
     # TODO use generator model.fit_generator, see https://keras.io/models/model/
 
-    csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv', append=False, separator=';')
-    train_history = model.fit(images, angles, epochs=5, validation_split=0.2, shuffle=True, callbacks=[csv_logger])
+    csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv')
+    train_history = model.fit(images, angles, epochs=7, validation_split=0.2, shuffle=True, callbacks=[csv_logger])
+    # TODO increase epochs
 
     # TODO
     #plt.plot(train_history.history['loss'])
@@ -134,5 +138,5 @@ if __name__ == '__main__':
     driving_dataset = load_dataset(dataset, '../drivelog1/driving_log.csv')
     driving_dataset = load_dataset(dataset, '../drivelog2/driving_log.csv', header=0)
     steering_model = create_model_nvidia()
-    #train_model(steering_model, driving_dataset)
+    train_model(steering_model, driving_dataset)
     save_model(steering_model, 'model-' + timestamp_start + '.h5')
