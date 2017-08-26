@@ -1,12 +1,17 @@
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Flatten, Lambda, Dropout, Cropping2D
 from keras.layers.convolutional import Conv2D
-from keras.preprocessing import image
+from keras.preprocessing import image as keras_image
+from keras.callbacks import CSVLogger
+#import matplotlib.pyplot as plt #TODO
 import pandas as pd
 import numpy as np
 import logging
+import datetime
 import math
 from tqdm import tqdm
+
+timestamp_start = datetime.datetime.now().strftime("%Y-%B-%d-%I:%M%p")
 
 # setup logging
 logger = logging.getLogger('model')
@@ -17,49 +22,11 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
+
 class DataSet( object ):
-   def __init__( self ):
-       self.angles = None
-       self.images = None
-
-def create_model_transfered():
-
-    def freeze_layers(model):
-        for layer in model.layers:
-            layer.trainable = False
-
-    # TODO use googlenet since it is fast in inference so training
-    # model = create_googlenet('googlenet_weights.h5')
-    # TODO remove layers of googlenet: model.layers.pop()
-
-    model = Sequential()
-    model.add(Flatten(input_shape=(160, 320, 3)))
-    '''
-    # TODO
-
-    input = Input(shape=(224, 224, 3))
-    model = VGG16(input_tensor=input, include_top=False)
-    freeze_layers(model)
-
-    model.add(Flatten(name='flatten'))
-    model.add(Dense(4096, activation='relu', name='fc1'))
-    model.add(Dense(4096, activation='relu', name='fc2'))
-    '''
-    model.add(Dense(1, name='angle'))
-
-    model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
-
-    return model
-
-
-def create_model_trivial():
-    model = Sequential()
-    model.add(Flatten(input_shape=(160, 320, 3)))
-    model.add(Dense(1))
-
-    model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
-
-    return model
+    def __init__( self ):
+        self.angles = []
+        self.images = []
 
 
 def create_model_nvidia():
@@ -72,30 +39,27 @@ def create_model_nvidia():
     # TODO use YUV planes of image?
 
     model = Sequential()
-    model.add(Cropping2D(cropping=((50, 20), (0, 0)), input_shape=(3, 160, 320)))
-    model.add(Lambda(lambda x : x / 255.0 - 0.5))
+    model.add(Cropping2D(cropping=((50, 20), (0, 0)), input_shape=(160, 320, 3)))
+    model.add(Lambda(lambda x: keras_image.resize_images(x, 128, 128)))
+    model.add(Lambda(lambda x: x / 255.0 - 0.5))
 
-    model.add(Conv2D(24, 5, 5, subsample=(2, 2), name='conv_1', activation='elu'))
-    model.add(Conv2D(36, 5, 5, subsample=(2, 2), name='conv_2', activation='elu'))
-    model.add(Conv2D(48, 5, 5, subsample=(2, 2), name='conv_3', activation='elu'))
-    model.add(Conv2D(64, 3, 3, subsample=(1, 1), name='conv_4', activation='elu'))
-    model.add(Conv2D(64, 3, 3, subsample=(1, 1), name='conv_5', activation='elu'))
+    model.add(Conv2D(24, 5, strides=2, name='conv_1', activation='elu'))
+    model.add(Conv2D(36, 5, strides=2, name='conv_2', activation='elu'))
+    model.add(Conv2D(48, 5, strides=2, name='conv_3', activation='elu'))
+    model.add(Conv2D(64, 3, strides=1, name='conv_4', activation='elu'))
+    model.add(Conv2D(64, 3, strides=1, name='conv_5', activation='elu'))
 
-    model.add(Flatten())
-    model.add(Dense(1164))
-    model.add(Activation('elu'))
+    model.add(Flatten(name='flatten'))
+    model.add(Dense(1164, activation='elu', name='dense1'))
     model.add(Dropout(0.5))
 
-    model.add(Dense(100))
-    model.add(Activation('elu'))
+    model.add(Dense(100, activation='elu', name='dense2'))
     model.add(Dropout(0.5))
 
-    model.add(Dense(50))
-    model.add(Activation('elu'))
+    model.add(Dense(50, activation='elu', name='dense3'))
     model.add(Dropout(0.5))
 
-    model.add(Dense(10))
-    model.add(Activation('elu'))
+    model.add(Dense(10, activation='elu', name='dense5'))
 
     model.add(Dense(1, name='angle'))
 
@@ -104,70 +68,60 @@ def create_model_nvidia():
     return model
 
 
-def load_dataset(drivelog_csv_path):
+def load_dataset(dataset, drivelog_csv_path, header=None):
     def load_img(path):
         path = drivelog_csv_path[0:drivelog_csv_path.rfind('/')] + '/IMG/' + path.split('/')[-1]
-        img = image.load_img(path)
-        img = image.img_to_array(img)
+        img = keras_image.load_img(path)
+        img = keras_image.img_to_array(img)
         return img
 
     logger.info('loading drive log %s', drivelog_csv_path)
     drive_log = pd.read_csv(drivelog_csv_path,
+                            header=header,
                             names=['img_path_center', 'img_path_left', 'img_path_right',
                                    'angle', 'throttle', 'break', 'speed'],
                             dtype={'angle':np.float32})
     logger.info('drive log size: %d', drive_log.size)
 
-    dataset = DataSet()
     len_dataset = drive_log.size
-    angles = []
-    images = []
 
     # TODO use np memory map to deal with too low main mem?, see https://www.kaggle.com/c/state-farm-distracted-driver-detection/discussion/20664
     angle_correction = 2
-    for index, drive_log_row in tqdm(drive_log[0:len_dataset].iterrows(), 'loading and normalizing training images'):
-        # TODO angle = float(drive_log_row['angle'])
+    for index, drive_log_row in tqdm(drive_log[0:len_dataset].iterrows(), 'loading and augmenting training images'):
+
+        def add_entry(angle, img):
+            dataset.angles.append(angle)
+            dataset.images.append(img)
+            dataset.angles.append(angle * -1.0)
+            dataset.images.append(np.fliplr(img))
+
         angle = drive_log_row['angle']
-        angles.append(angle)
-        img = load_img(drive_log_row['img_path_center'])
-        images.append(img)
-        angles.append(angle*-1.0)
-        images.append(np.fliplr(img))
-
-        img_left = load_img(drive_log_row['img_path_left'])
-        angle_left = angle + angle_correction
-        dataset.angles.append(angle_left)
-        dataset.images.append(img_left)
-        dataset.angles.append(angle_left*-1.0)
-        dataset.images.append(np.fliplr(img_left))
-
-        img_right = load_img(drive_log_row['img_path_right'])
-        angle_right = angle - angle_correction
-        dataset.angles.append(angle_right)
-        dataset.images.append(img_right)
-        dataset.angles.append(angle_right * -1.0)
-        dataset.images.append(np.fliplr(img_right))
-
-
-    dataset.angles = np.array(angles)
-    dataset.images = np.array(images)
+        add_entry(angle, load_img(drive_log_row['img_path_center']))
+        add_entry(angle + angle_correction, load_img(drive_log_row['img_path_left']))
+        add_entry(angle - angle_correction, load_img(drive_log_row['img_path_right']))
 
     return dataset
 
 
-def augment_dataset(dataset):
-    #data_gen = image.ImageDataGenerator(horizontal_flip=True)
-    pass
-
-
 def train_model(model, dataset):
+    angles = np.array(dataset.angles)
+    images = np.array(dataset.images)
 
-    # TODO create bottleneck features to speed up training (so inference of transfer learning model is not needed during training)
+    # TODO use generator model.fit_generator, see https://keras.io/models/model/
 
-    # TODO could use model.fit_generator to load and augment images while training on gpu
-    model.fit(dataset.images, dataset.angles, epochs=7, validation_split=0.2, shuffle=True)
-    # TODO validate model after each epoch and print out results
-    pass
+    csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv', append=False, separator=';')
+    train_history = model.fit(images, angles, epochs=5, validation_split=0.2, shuffle=True, callbacks=[csv_logger])
+
+    # TODO
+    #plt.plot(train_history.history['loss'])
+    #plt.plot(train_history.history['val_loss'])
+    #plt.title('model mean squared error loss')
+    #plt.ylabel('mean squared error loss')
+    #plt.xlabel('epoch')
+    #plt.legend(['training set', 'validation set'], loc='upper right')
+    #plt.figure().savefig('training-history-' + timestamp_start + '.png')
+
+    return
 
 
 def save_model(model, filename):
@@ -175,13 +129,10 @@ def save_model(model, filename):
     logger.info('saved model to %s', filename)
 
 
-img = None
 if __name__ == '__main__':
-
-    # TODO record new training data using mouse input for fine grained drive angles
-
-    driving_dataset = load_dataset('../drivelog1/driving_log.csv')
-    augment_dataset(driving_dataset)
+    dataset = DataSet()
+    driving_dataset = load_dataset(dataset, '../drivelog1/driving_log.csv')
+    driving_dataset = load_dataset(dataset, '../drivelog2/driving_log.csv', header=0)
     steering_model = create_model_nvidia()
-    train_model(steering_model, driving_dataset)
-    save_model(steering_model, 'model-2.h5')
+    #train_model(steering_model, driving_dataset)
+    save_model(steering_model, 'model-' + timestamp_start + '.h5')
