@@ -122,7 +122,7 @@ def train_model(model, drive_log):
                 yield shuffle(np.array(images), np.array(angles))
 
     train_drive_log, validate_drive_log = train_test_split(drive_log, test_size=0.2)
-    batch_size = 256
+    batch_size = 64
     train_generator = sample_generator(train_drive_log, batch_size)
     validate_generator = sample_generator(validate_drive_log, batch_size)
 
