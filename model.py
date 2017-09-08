@@ -127,7 +127,7 @@ def train_model(model, drive_log):
     validate_generator = sample_generator(validate_drive_log, batch_size)
 
     model_checkpoint = ModelCheckpoint(
-        filepath='model-' + timestamp_start + '{epoch:02d}-{val_loss:.2f}.h5',
+        filepath='model-' + timestamp_start + '{epoch:02d}-{val_loss:.4f}.h5',
         verbose=1,
         save_best_only=True)
     csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv')
