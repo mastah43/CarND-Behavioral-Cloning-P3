@@ -88,8 +88,8 @@ def train_model(model, drive_log):
     def sample_generator(drive_log, batch_size=128):
         num_samples = len(drive_log)
         shuffle(drive_log)
-        # correction angle for left and right camera image; interpretes to 3°
-        angle_correction = 0.12
+        # correction angle for left and right camera image; interpretes to 6°
+        angle_correction = 0.24
 
         # TODO create drive_log with augmented entries (using python function for augmentation)
 
@@ -127,7 +127,7 @@ def train_model(model, drive_log):
     validate_generator = sample_generator(validate_drive_log, batch_size)
 
     model_checkpoint = ModelCheckpoint(
-        filepath='model-' + timestamp_start + '{epoch:02d}-{val_loss:.4f}.h5',
+        filepath='model-' + timestamp_start + '-{epoch:02d}-{val_loss:.4f}.h5',
         verbose=1,
         save_best_only=True)
     csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv')
