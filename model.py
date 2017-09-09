@@ -12,7 +12,6 @@ import datetime
 import argparse
 import random
 import os
-import cv2
 
 timestamp_start = datetime.datetime.now().strftime("%Y%m%d-%H%M")
 
@@ -103,21 +102,7 @@ def train_model(model, drive_log):
             img = keras_image.img_to_array(img)
             return img
 
-        def image_shift(img):
-            """
-            Shift image and transform steering angle
-            Left and center image in recorded data are shifted by approx. 110 pixels (same for right and center img).
-            """
-            trans_range = 80
-            shift_x = trans_range * np.random.uniform() - trans_range / 2
-            m = np.float32([[1, 0, shift_x], [0, 1, 0]])
-            img = cv2.warpAffine(img, m, (img.shape[1], img.shape[0]))
-            ang_adj = shift_x / trans_range * 2 * 0.2
-            return img, ang_adj
-
         def add_sample(angle, img):
-            #img, angle_adjust = image_shift(img)
-            #angles.append(angle + angle_adjust)
             angles.append(angle)
             images.append(img)
 
@@ -127,17 +112,9 @@ def train_model(model, drive_log):
 
         while 1:
             for index, drive_log_row in drive_log.iterrows():
-                # TODO sample_alternative = random.randint(1, 4):
                 angle_center = drive_log_row['angle']
                 angle_left = angle_center + angle_correction
                 angle_right = angle_center - angle_correction
-
-                '''
-                # TODO
-                if sample_alternative == 1:
-                elif sample_alternative == 1:
-                else:
-                '''
 
                 add_sample_and_augment(angle_center, load_img(drive_log_row['img_path_center']))
                 add_sample_and_augment(angle_left, load_img(drive_log_row['img_path_left']))
