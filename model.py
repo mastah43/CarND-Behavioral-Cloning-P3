@@ -5,13 +5,15 @@ from keras.preprocessing import image as keras_image
 from keras.callbacks import CSVLogger, ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-#import matplotlib.pyplot as plt #TODO
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import logging
 import datetime
 import argparse
+import random
 import os
+import cv2
 
 timestamp_start = datetime.datetime.now().strftime("%Y%m%d-%H%M")
 
@@ -85,44 +87,72 @@ def load_drive_log(csv_path, header=None):
 
 def train_model(model, drive_log):
 
-    def sample_generator(drive_log, batch_size=128):
+    def sample_generator(drive_log, batch_size):
         num_samples = len(drive_log)
-        shuffle(drive_log)
+
+        # shuffle so that order of training samples must not be relevant for training outcome
+        shuffle(drive_log, random_state=4711)
+
         # correction angle for left and right camera image; interpretes to 6°
+        # angle is in range -1 to 1 which interpretes to -25° to +25°
         angle_correction = 0.24
 
-        # TODO create drive_log with augmented entries (using python function for augmentation)
+        images = []
+        angles = []
+
+        def load_img(path):
+            img = keras_image.load_img(path)
+            img = keras_image.img_to_array(img)
+            return img
+
+        def image_shift(img):
+            """
+            Shift image and transform steering angle
+            Left and center image in recorded data are shifted by approx. 110 pixels (same for right and center img).
+            """
+            trans_range = 80
+            shift_x = trans_range * np.random.uniform() - trans_range / 2
+            m = np.float32([[1, 0, shift_x], [0, 1, 0]])
+            img = cv2.warpAffine(img, m, (img.shape[1], img.shape[0]))
+            ang_adj = shift_x / trans_range * 2 * 0.2
+            return img, ang_adj
+
+        def add_sample(angle, img):
+            #img, angle_adjust = image_shift(img)
+            #angles.append(angle + angle_adjust)
+            angles.append(angle)
+            images.append(img)
+
+        def add_sample_and_augment(angle, img):
+            add_sample(angle, img)
+            add_sample(angle * -1.0, np.fliplr(img))
 
         while 1:
-            for offset in range(0, num_samples, batch_size):
-                batch_samples = drive_log[offset:offset + batch_size]
-                images = []
-                angles = []
+            for index, drive_log_row in drive_log.iterrows():
+                # TODO sample_alternative = random.randint(1, 4):
+                angle_center = drive_log_row['angle']
+                angle_left = angle_center + angle_correction
+                angle_right = angle_center - angle_correction
 
-                def load_img(path):
-                    img = keras_image.load_img(path)
-                    img = keras_image.img_to_array(img)
-                    return img
+                '''
+                # TODO
+                if sample_alternative == 1:
+                elif sample_alternative == 1:
+                else:
+                '''
 
-                def add_sample_and_augment(angle, img):
-                    angles.append(angle)
-                    images.append(img)
-                    angles.append(angle * -1.0)
-                    images.append(np.fliplr(img))
+                add_sample_and_augment(angle_center, load_img(drive_log_row['img_path_center']))
+                add_sample_and_augment(angle_left, load_img(drive_log_row['img_path_left']))
+                add_sample_and_augment(angle_right, load_img(drive_log_row['img_path_right']))
 
-                for index, drive_log_row in batch_samples.iterrows():
-                    # angle is in range -1 to 1 which interpretes to -25° to +25°
-                    angle_center = drive_log_row['angle']
-                    add_sample_and_augment(angle_center, load_img(drive_log_row['img_path_center']))
-                    angle_left = angle_center + angle_correction
-                    angle_right = angle_center - angle_correction
-                    add_sample_and_augment(angle_left, load_img(drive_log_row['img_path_left']))
-                    add_sample_and_augment(angle_right, load_img(drive_log_row['img_path_right']))
+                if len(angles) >= batch_size:
+                    yield shuffle(np.array(images), np.array(angles))
+                    images, angles = [], []
 
-                yield shuffle(np.array(images), np.array(angles))
+    if limit_samples > 0:
+        drive_log = drive_log.sample(limit_samples, random_state=4711)
 
     train_drive_log, validate_drive_log = train_test_split(drive_log, test_size=0.2)
-    batch_size = 64
     train_generator = sample_generator(train_drive_log, batch_size)
     validate_generator = sample_generator(validate_drive_log, batch_size)
 
@@ -131,11 +161,13 @@ def train_model(model, drive_log):
         verbose=1,
         save_best_only=True)
     csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv')
+
+    augmentation_factor = 6
     model.fit_generator(generator=train_generator,
-                        steps_per_epoch=train_drive_log.size/batch_size,
+                        steps_per_epoch=(train_drive_log.size/batch_size)*augmentation_factor,
                         validation_data=validate_generator,
-                        validation_steps=validate_drive_log.size/batch_size,
-                        nb_epoch=7,
+                        validation_steps=(validate_drive_log.size/batch_size)*augmentation_factor,
+                        epochs=epochs,
                         callbacks=[csv_logger, model_checkpoint])
 
     # TODO plot history of losses
@@ -150,23 +182,37 @@ def train_model(model, drive_log):
     return
 
 
-def save_model(model, filename):
-    model.save(filename)
-    logger.info('saved model to %s', filename)
+def init_params_from_cmd_args():
+    parser = argparse.ArgumentParser(description="training model for udacity carnd project 3")
+    parser.add_argument('--epochs', type=int, default=4, help='# of training epochs')
+    parser.add_argument('--limit_samples', type=int, default=-1, help='# of samples to')
+    parser.add_argument('--batch_size', type=int, default=64, help='training batch size')
+    parser.add_argument('--batch_per_epoch', type=int, default=-1, help='batch per epoch')
+    args = parser.parse_args()
+    global epochs
+    global limit_samples
+    global batch_size
+    epochs = args.epochs
+    batch_size = args.epochs
+    limit_samples = args.limit_samples
+
+
+epochs = None
+limit_samples = None
+batch_size = None
+batches_per_epoch = None
 
 
 if __name__ == '__main__':
-    # TODO batchsize arg
-    #parser = argparse.ArgumentParser(description='Process some integers.')
-    #parser.add_argument('--batchsize', dest='accumulate', action='store_const',
-    #                    const=sum, default=max,
-    #                    help='sum the integers (default: find the max)')
-    #args = parser.parse_args()
+
+    # ensure same result for each training run on same training data and parameters
+    random.seed(4711)
+
+    init_params_from_cmd_args()
 
     drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
     drive_log2 = load_drive_log('../drivelog2/driving_log.csv', header=0)
-    drive_log_all = pd.concat([drive_log1, drive_log2])
+    drive_log_all = drive_log2 # TODO pd.concat([drive_log1, drive_log2])
 
     steering_model = create_model_nvidia()
     train_model(steering_model, drive_log_all)
-    save_model(steering_model, 'model-' + timestamp_start + '.h5')
