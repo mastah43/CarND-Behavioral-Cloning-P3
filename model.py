@@ -5,7 +5,6 @@ from keras.preprocessing import image as keras_image
 from keras.callbacks import CSVLogger, ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import logging
