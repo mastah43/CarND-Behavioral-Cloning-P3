@@ -76,7 +76,6 @@ def load_drive_log(csv_path, header=None):
         return os.path.join(os.path.dirname(os.path.realpath(csv_path)), 'IMG', path.split('/')[-1])
 
     for index,row in df.iterrows():
-        # TODO improve efficiency
         df.set_value(index, 'img_path_center', map_img_path(row['img_path_center']))
         df.set_value(index, 'img_path_left', map_img_path(row['img_path_left']))
         df.set_value(index, 'img_path_right', map_img_path(row['img_path_right']))
