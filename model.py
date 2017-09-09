@@ -78,7 +78,7 @@ def load_drive_log(csv_path, header=None):
         df.set_value(index, 'img_path_left', map_img_path(row['img_path_left']))
         df.set_value(index, 'img_path_right', map_img_path(row['img_path_right']))
 
-    logger.info('drive log size: %d', df.size)
+    logger.info('drive log size: %d', len(df))
     return df
 
 
