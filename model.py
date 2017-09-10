@@ -63,28 +63,34 @@ def create_model_nvidia():
 
 
 def load_drive_log(csv_path, header=None):
+    def map_img_path(path):
+        return os.path.join(os.path.dirname(os.path.realpath(csv_path)), 'IMG', path.split('/')[-1])
+
     logger.info('loading drive log %s', csv_path)
     df = pd.read_csv(csv_path,
                      header=header,
                      names=['img_path_center', 'img_path_left', 'img_path_right',
                             'angle', 'throttle', 'break', 'speed'],
-                     dtype={'angle':np.float32})
+                     dtype={'angle': np.float32})
 
-    def map_img_path(path):
-        return os.path.join(os.path.dirname(os.path.realpath(csv_path)), 'IMG', path.split('/')[-1])
-
-    for index,row in df.iterrows():
+    # correct image paths
+    for index, row in df.iterrows():
         df.set_value(index, 'img_path_center', map_img_path(row['img_path_center']))
         df.set_value(index, 'img_path_left', map_img_path(row['img_path_left']))
         df.set_value(index, 'img_path_right', map_img_path(row['img_path_right']))
+
+    len_loaded = len(df)
+
+    # remove samples not moving
+    df = df[(df.speed > 0.1)]
+    logger.info('removed %d samples where car was not moving', (len(df) - len_loaded))
 
     logger.info('drive log size: %d', len(df))
     return df
 
 
 def train_model(model, drive_log):
-
-    def sample_generator(drive_log, batch_size):
+    def sample_generator(drive_log, batch_size, plot_images=False):
         num_samples = len(drive_log)
 
         # shuffle so that order of training samples must not be relevant for training outcome
@@ -110,7 +116,9 @@ def train_model(model, drive_log):
             add_sample(angle, img)
             add_sample(angle * -1.0, np.fliplr(img))
 
+        batch = 0
         while 1:
+            batch += 1
             for index, drive_log_row in drive_log.iterrows():
                 angle_center = drive_log_row['angle']
                 angle_left = angle_center + angle_correction
@@ -121,6 +129,19 @@ def train_model(model, drive_log):
                 add_sample_and_augment(angle_right, load_img(drive_log_row['img_path_right']))
 
                 if len(angles) >= batch_size:
+                    if plot_images and batch == 1:
+                        import matplotlib.pyplot as plt
+                        import cv2
+                        fig = plt.figure()
+                        for j, (img, angle) in enumerate(zip(images[0:30], angles[0:30])):
+                            plt.subplot(6, 5, j + 1)
+                            plt.title("angle=%.4f" % angle)
+                            plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                        fig.set_size_inches(30, 15)
+                        plt.savefig('input-images-excerpt.png')
+                        plt.close(fig)
+                        logger.info("plotted images")
+
                     yield shuffle(np.array(images), np.array(angles))
                     images, angles = [], []
 
@@ -129,7 +150,7 @@ def train_model(model, drive_log):
         logger.info('limited data set to: %d', len(drive_log))
 
     train_drive_log, validate_drive_log = train_test_split(drive_log, test_size=0.2)
-    train_generator = sample_generator(train_drive_log, batch_size)
+    train_generator = sample_generator(train_drive_log, batch_size, plot_images=plot_augmented_images)
     validate_generator = sample_generator(validate_drive_log, batch_size)
 
     model_checkpoint = ModelCheckpoint(
@@ -139,8 +160,9 @@ def train_model(model, drive_log):
     csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv')
 
     augmentation_factor = 6
-    steps_per_epoch = train_drive_log.size*augmentation_factor*1.0/batch_size
-    validation_steps = validate_drive_log.size*augmentation_factor*1.0/batch_size
+    steps_per_epoch = train_drive_log.size * augmentation_factor * 1.0 / batch_size
+    validation_steps = validate_drive_log.size * augmentation_factor * 1.0 / batch_size
+    logger.info('using batch_size: %d', batch_size)
     logger.info('using steps per epoch: %d', steps_per_epoch)
     logger.info('using validation steps: %d', validation_steps)
     model.fit_generator(generator=train_generator,
@@ -151,13 +173,13 @@ def train_model(model, drive_log):
                         callbacks=[csv_logger, model_checkpoint])
 
     # TODO plot history of losses
-    #plt.plot(train_history.history['loss'])
-    #plt.plot(train_history.history['val_loss'])
-    #plt.title('model mean squared error loss')
-    #plt.ylabel('mean squared error loss')
-    #plt.xlabel('epoch')
-    #plt.legend(['training set', 'validation set'], loc='upper right')
-    #plt.figure().savefig('training-history-' + timestamp_start + '.png')
+    # plt.plot(train_history.history['loss'])
+    # plt.plot(train_history.history['val_loss'])
+    # plt.title('model mean squared error loss')
+    # plt.ylabel('mean squared error loss')
+    # plt.xlabel('epoch')
+    # plt.legend(['training set', 'validation set'], loc='upper right')
+    # plt.figure().savefig('training-history-' + timestamp_start + '.png')
 
     return
 
@@ -168,12 +190,13 @@ def init_params_from_cmd_args():
     parser.add_argument('--limit_samples', type=int, default=-1, help='# of samples to')
     parser.add_argument('--batch_size', type=int, default=64, help='training batch size')
     parser.add_argument('--batch_per_epoch', type=int, default=-1, help='batch per epoch')
+    parser.add_argument('--plot_augmented_images', type=bool, default=False, help='plot augmented images')
     args = parser.parse_args()
     global epochs
     global limit_samples
     global batch_size
     epochs = args.epochs
-    batch_size = args.epochs
+    batch_size = args.batch_size
     limit_samples = args.limit_samples
 
 
@@ -181,18 +204,19 @@ epochs = None
 limit_samples = None
 batch_size = None
 batches_per_epoch = None
-
+plot_augmented_images = False
 
 if __name__ == '__main__':
-
     # ensure same result for each training run on same training data and parameters
     random.seed(4711)
 
     init_params_from_cmd_args()
+    plot_augmented_images = True # TODO
 
-    drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
+    #drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
     drive_log2 = load_drive_log('../drivelog2/driving_log.csv', header=0)
-    drive_log_all = drive_log2 # TODO pd.concat([drive_log1, drive_log2])
+    #drive_log3 = load_drive_log('../drivelog3/driving_log.csv')
+    drive_log_all = drive_log2 # pd.concat([drive_log1, drive_log2, drive_log3])
 
     steering_model = create_model_nvidia()
     train_model(steering_model, drive_log_all)
