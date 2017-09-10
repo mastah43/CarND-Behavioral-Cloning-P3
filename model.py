@@ -189,7 +189,6 @@ def init_params_from_cmd_args():
     parser.add_argument('--epochs', type=int, default=4, help='# of training epochs')
     parser.add_argument('--limit_samples', type=int, default=-1, help='# of samples to')
     parser.add_argument('--batch_size', type=int, default=64, help='training batch size')
-    parser.add_argument('--batch_per_epoch', type=int, default=-1, help='batch per epoch')
     parser.add_argument('--plot_augmented_images', type=bool, default=False, help='plot augmented images')
     args = parser.parse_args()
     global epochs
@@ -211,7 +210,6 @@ if __name__ == '__main__':
     random.seed(4711)
 
     init_params_from_cmd_args()
-    plot_augmented_images = True # TODO
 
     #drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
     drive_log2 = load_drive_log('../drivelog2/driving_log.csv', header=0)
