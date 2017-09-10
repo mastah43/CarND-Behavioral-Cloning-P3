@@ -126,6 +126,7 @@ def train_model(model, drive_log):
 
     if limit_samples > 0:
         drive_log = drive_log.sample(limit_samples, random_state=4711)
+        logger.info('limited data set to: %d', len(drive_log))
 
     train_drive_log, validate_drive_log = train_test_split(drive_log, test_size=0.2)
     train_generator = sample_generator(train_drive_log, batch_size)
@@ -138,10 +139,14 @@ def train_model(model, drive_log):
     csv_logger = CSVLogger('training-history-' + timestamp_start + '.csv')
 
     augmentation_factor = 6
+    steps_per_epoch = train_drive_log.size*augmentation_factor*1.0/batch_size
+    validation_steps = validate_drive_log.size*augmentation_factor*1.0/batch_size
+    logger.info('using steps per epoch: %d', steps_per_epoch)
+    logger.info('using validation steps: %d', validation_steps)
     model.fit_generator(generator=train_generator,
-                        steps_per_epoch=(train_drive_log.size/batch_size)*augmentation_factor,
+                        steps_per_epoch=steps_per_epoch,
                         validation_data=validate_generator,
-                        validation_steps=(validate_drive_log.size/batch_size)*augmentation_factor,
+                        validation_steps=validation_steps,
                         epochs=epochs,
                         callbacks=[csv_logger, model_checkpoint])
 
