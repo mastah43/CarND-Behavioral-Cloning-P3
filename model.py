@@ -88,6 +88,20 @@ def load_drive_log(csv_path, header=None):
     return df
 
 
+def plot_images_to_file(images, angles):
+    import matplotlib.pyplot as plt
+    import cv2
+    fig = plt.figure()
+    for j, (img, angle) in enumerate(zip(images, angles)):
+        plt.subplot(6, 5, j + 1)
+        plt.title("angle=%.4f" % angle)
+        plt.imshow(img)
+    fig.set_size_inches(30, 15)
+    plt.savefig('input-images-excerpt.png')
+    plt.close(fig)
+    logger.info("plotted images")
+
+
 def train_model(model, drive_log):
     def sample_generator(drive_log, batch_size, plot_images=False):
         num_samples = len(drive_log)
@@ -129,17 +143,7 @@ def train_model(model, drive_log):
 
                 if len(angles) >= batch_size:
                     if plot_images and batch == 1:
-                        import matplotlib.pyplot as plt
-                        import cv2
-                        fig = plt.figure()
-                        for j, (img, angle) in enumerate(zip(images[0:30], angles[0:30])):
-                            plt.subplot(6, 5, j + 1)
-                            plt.title("angle=%.4f" % angle)
-                            plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-                        fig.set_size_inches(30, 15)
-                        plt.savefig('input-images-excerpt.png')
-                        plt.close(fig)
-                        logger.info("plotted images")
+                        plot_images_to_file(images[0:30], angles[0:30])
 
                     yield shuffle(np.array(images), np.array(angles))
                     images, angles = [], []
