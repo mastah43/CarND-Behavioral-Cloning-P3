@@ -34,7 +34,6 @@ def create_model_nvidia():
 
     model = Sequential()
     model.add(Cropping2D(cropping=((50, 20), (0, 0)), input_shape=(160, 320, 3)))
-    # TODO resize image to 45, 160, 3 ?
     model.add(Lambda(lambda x: x / 255.0 - 0.5))
 
     model.add(Conv2D(24, 5, strides=2, name='conv_1', activation='elu'))
@@ -172,15 +171,6 @@ def train_model(model, drive_log):
                         epochs=epochs,
                         callbacks=[csv_logger, model_checkpoint])
 
-    # TODO plot history of losses
-    # plt.plot(train_history.history['loss'])
-    # plt.plot(train_history.history['val_loss'])
-    # plt.title('model mean squared error loss')
-    # plt.ylabel('mean squared error loss')
-    # plt.xlabel('epoch')
-    # plt.legend(['training set', 'validation set'], loc='upper right')
-    # plt.figure().savefig('training-history-' + timestamp_start + '.png')
-
     return
 
 
@@ -211,10 +201,11 @@ if __name__ == '__main__':
 
     init_params_from_cmd_args()
 
-    #drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
+    drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
     drive_log2 = load_drive_log('../drivelog2/driving_log.csv', header=0)
-    #drive_log3 = load_drive_log('../drivelog3/driving_log.csv')
-    drive_log_all = drive_log2 # pd.concat([drive_log1, drive_log2, drive_log3])
+    drive_log3 = load_drive_log('../drivelog3/driving_log.csv')
+    drive_log4 = load_drive_log('../drivelog4/driving_log.csv')
+    drive_log_all = pd.concat([drive_log1, drive_log2, drive_log3])
 
     steering_model = create_model_nvidia()
     train_model(steering_model, drive_log_all)
