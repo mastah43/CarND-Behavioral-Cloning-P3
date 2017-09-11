@@ -1,11 +1,5 @@
 #**Behavioral Cloning** 
 
-##Writeup Template
-
-###You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
-
----
-
 **Behavioral Cloning Project**
 
 The goals / steps of this project are the following:
@@ -37,51 +31,63 @@ The goals / steps of this project are the following:
 My project includes the following files:
 * model.py containing the script to create and train the model
 * drive.py for driving the car in autonomous mode
-* model.h5 containing a trained convolution neural network 
+* model.h5 containing a trained convolution neural network
+* video.mp4 a video where the trained model drives the car on track 1
 * writeup_report.md or writeup_report.pdf summarizing the results
 
 ####2. Submission includes functional code
-Using the Udacity provided simulator and my drive.py file, the car can be driven autonomously around the track by executing 
+Using the Udacity provided simulator and my drive.py file, the car can be driven autonomously around the track 1 
+by executing 
 ```sh
 python drive.py model.h5
 ```
 
 ####3. Submission code is usable and readable
 
-The model.py file contains the code for training and saving the convolution neural network. The file shows the pipeline I used for training and validating the model, and it contains comments to explain how the code works.
+The model.py file contains the code for training and saving the convolution neural network. 
+The file shows the pipeline I used for training and validating the model, 
+and it contains comments to explain how the code works.
+
+The following parameters can be used:
+* batch_size: batch size to use for training and validation
+* epochs: number of epochs to train
+* limit_samples: optional; can be set to use only the given number of samples from the data sets
+* plot_augmented_images: optional; can be set to plot the first 30 images used for training
 
 ###Model Architecture and Training Strategy
 
 ####1. An appropriate model architecture has been employed
 
-TODO
-- use image net trained model - remove last one or two fully connected layers
-- add layers
-- add train / back prop stop
-- train model
+I implemented the model described in a paper by nvidia for end 2 end vehicle steering.
+It is a regression model which outputs the steering angle in a range of -1.0 to +1.0 which interpretes to -25 to +25 
+degrees. It solely takes as input the RGB image of the simulator with a width of 320 pixels and a height of 160 pixels.
+The model consists of a cropping layer, a normalization layer, five convolutional layers and five fully connected layers.
 
-TODO
-My model consists of a convolution neural network with 3x3 filter sizes and depths between 32 and 128 (model.py lines 18-24) 
+
+TODO add link to paper
 
 TODO
 The model includes RELU layers to introduce nonlinearity (code line 20), and the data is normalized in the model using a Keras lambda layer (code line 18). 
 
 ####2. Attempts to reduce overfitting in the model
 
-TODO
-The model contains dropout layers in order to reduce overfitting (model.py lines 21). 
-
-The model was trained and validated on different data sets to ensure that the model was not overfitting (code line 10-16). The model was tested by running it through the simulator and ensuring that the vehicle could stay on the track.
+To prevent overfitting I included dropout layers in the model after each of the first three fully connected layers.
+The model was trained and validated on different data sets (20% for validation) to ensure that the model was not overfitting. 
 
 ####3. Model parameter tuning
 
-TODO
-The model used an adam optimizer, so the learning rate was not tuned manually (model.py line 25).
+The model training uses an adam optimizer, so the learning rate was not tuned manually.
+I did not spend time on tuning the model parameters like dropout factor or layer dimensions.
+Instead I experimented with different amounts of training data and augmentation techniques.
 
 ####4. Appropriate training data
 
-TODO
-Training data was chosen to keep the vehicle driving on the road. I used a combination of center lane driving, recovering from the left and right sides of the road ... 
+As a training data set I used to provided data set by Udacity.
+Additionally I collected several rounds of clean driving on track 1 to include more variance.
+
+Additionally to the center images and steering angles I also used the left and right camera image and  
+a steering angle +6 respectively -6 degrees in relation to the center steering angle as training input.
+This helped to make the model learn recovery on all parts of the track. 
 
 For details about how I created the training data, see the next section. 
 
@@ -89,6 +95,7 @@ For details about how I created the training data, see the next section.
 
 ####1. Solution Design Approach
 
+I did not use a model pre
 TODO
 The overall strategy for deriving a model architecture was to ...
 
@@ -121,14 +128,13 @@ To capture good driving behavior, I first recorded two laps on track one using c
 ![alt text][image2]
 
 TODO
-I then recorded the vehicle recovering from the left side and right sides of the road back to center so that the vehicle would learn to .... These images show what a recovery looks like starting from ... :
+I did not include explicit recordings for recovering from sides to the center of the road. 
+Instead I used the left and right camera images from all recordings. 
+This approach should get a generalized model that is able to recover from much more side driving situations.
 
-![alt text][image3]
-![alt text][image4]
+![alt text][image3] TODO image from left camera
+![alt text][image4] TODO image from left camera
 ![alt text][image5]
-
-TODO
-Then I repeated this process on track two in order to get more data points.
 
 TODO
 To augment the data set, I also flipped images and angles thinking that this would ... For example, here is an image that has then been flipped:
@@ -144,5 +150,9 @@ After the collection process, I had X number of data points. I then preprocessed
 TODO
 I finally randomly shuffled the data set and put 20% of the data into a validation set.
 
+
+
 TODO
 I used this training data for training the model. The validation set helped determine if the model was over or under fitting. The ideal number of epochs was Z as evidenced by ... I used an adam optimizer so that manually training the learning rate wasn't necessary.
+
+The model was tested by running it through the simulator and ensuring that the vehicle could stay on the track.
