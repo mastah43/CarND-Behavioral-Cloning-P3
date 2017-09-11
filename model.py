@@ -63,6 +63,8 @@ def create_model_nvidia():
 
 def load_drive_log(csv_path, header=None):
     def map_img_path(path):
+        # support also driving logs recorded on windows
+        path = path.replace('\\', '/')
         return os.path.join(os.path.dirname(os.path.realpath(csv_path)), 'IMG', path.split('/')[-1])
 
     logger.info('loading drive log %s', csv_path)
@@ -106,9 +108,6 @@ def train_model(model, drive_log):
     def sample_generator(drive_log, batch_size, plot_images=False):
         num_samples = len(drive_log)
 
-        # shuffle so that order of training samples must not be relevant for training outcome
-        shuffle(drive_log, random_state=4711)
-
         # correction angle for left and right camera image; interpretes to 6°
         # angle is in range -1 to 1 which interpretes to -25° to +25°
         angle_correction = 0.24
@@ -148,6 +147,8 @@ def train_model(model, drive_log):
                     yield shuffle(np.array(images), np.array(angles))
                     images, angles = [], []
 
+    # shuffle so that order of training samples must not be relevant for training outcome
+    shuffle(drive_log, random_state=4711)
     if limit_samples > 0:
         drive_log = drive_log.sample(limit_samples, random_state=4711)
         logger.info('limited data set to: %d', len(drive_log))
