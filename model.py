@@ -207,11 +207,12 @@ if __name__ == '__main__':
 
     init_params_from_cmd_args()
 
-    drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
+    #drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
     drive_log2 = load_drive_log('../drivelog2/driving_log.csv', header=0)
-    drive_log3 = load_drive_log('../drivelog3/driving_log.csv')
-    drive_log4 = load_drive_log('../drivelog4/driving_log.csv')
-    drive_log_all = pd.concat([drive_log1, drive_log2, drive_log3])
+    #drive_log3 = load_drive_log('../drivelog3/driving_log.csv')
+    #drive_log4 = load_drive_log('../drivelog4/driving_log.csv')
+    #drive_log_all = pd.concat([drive_log1, drive_log2, drive_log3])
+    drive_log_all = drive_log2 #pd.concat([drive_log1, drive_log2, drive_log3])
 
     steering_model = create_model_nvidia()
     train_model(steering_model, drive_log_all)
