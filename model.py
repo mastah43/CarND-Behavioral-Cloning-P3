@@ -1,6 +1,7 @@
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Flatten, Lambda, Dropout, Cropping2D
 from keras.layers.convolutional import Conv2D
+from keras.layers.pooling import AveragePooling2D
 from keras.optimizers import Adam
 from keras.preprocessing import image as keras_image
 from keras.callbacks import CSVLogger, ModelCheckpoint
@@ -129,6 +130,7 @@ def train_model(model, drive_log):
             images.append(img)
 
         def add_sample_and_flip(angle, img):
+            # TODO do always a viewpoint transformation?
             add_sample(angle, img)
             add_sample(angle * -1.0, np.fliplr(img))
 
@@ -189,6 +191,10 @@ def train_model(model, drive_log):
                 add_sample_and_flip(angle_center, load_img(drive_log_row['img_path_center']))
                 add_sample_and_flip(angle_left, load_img(drive_log_row['img_path_left']))
                 add_sample_and_flip(angle_right, load_img(drive_log_row['img_path_right']))
+
+                # TODO
+                #img, angle_corr = image_viewpoint_transform(img)
+                #angle += angle_corr
 
                 """
                 # TODO augment using perspective transformation and shifting
@@ -265,12 +271,12 @@ if __name__ == '__main__':
     plot_train_samples_count = args.plot_train_samples
 
     ### load data sets
-    #drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
+    drive_log1 = load_drive_log('../drivelog1/driving_log.csv')
     drive_log2 = load_drive_log('../drivelog2/driving_log.csv', header=0)
-    #drive_log3 = load_drive_log('../drivelog3/driving_log.csv')
-    #drive_log4 = load_drive_log('../drivelog4/driving_log.csv')
-    #drive_log_all = pd.concat([drive_log1, drive_log2, drive_log3])
-    drive_log_all = drive_log2 #pd.concat([drive_log1, drive_log2, drive_log3])
+    drive_log3 = load_drive_log('../drivelog3/driving_log.csv')
+    drive_log4 = load_drive_log('../drivelog4/driving_log.csv')
+    drive_log_all = pd.concat([drive_log1, drive_log2, drive_log3, drive_log4])
+    # TODO drive_log_all = drive_log2 # pd.concat([drive_log1, drive_log2, drive_log3, drive_log4])
 
     ### create model and train it
     steering_model = create_model_nvidia()
